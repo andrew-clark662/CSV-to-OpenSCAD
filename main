@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+@author: AndrewClak
+Created on Sat Feb  27 22:32:28 2021
+
+Description
+--------------------------
+
+"""
+
+import numpy as np
+import sys
+import pandas
+
+
+from solid import scad_render_to_file
+from solid.utils import extrude_along_path
+from solid.objects import linear_extrude, cube, square, sphere, cylinder, difference, translate, union
+from euclid3 import Point3
+
+
+#Reads in a csv file of 3D points and returns an array of Point3 points as well as the maximum cooridinate value
+#The max cooridinate value might not be super useful
+def ext_path(filename = 'Spiral5.csv', scale_factor = 1):
+    data = pandas.read_csv(filename,header=None);
+    #Now lets take this data structure and put it into Point3 formatting
+    data_pt3 = [];
+    max_x = max(scale_factor*data[0])
+    for i in range(0,len(data)):
+        x = scale_factor*data.loc[i,0];
+        y = scale_factor*data.loc[i,1];
+        z = scale_factor*data.loc[i,2];
+        data_pt3.append(Point3(x,y,z));
+    return [data_pt3,max_x]
+
+#Make a 2D circle with variable number of points around the circumference and adjustable radius
+def shape_circle(num_points=8, rad=1):
+    circle_pts = [];
+    angle_step = 2*np.pi/(num_points-1);
+    for i in range(0,num_points,1):
+        angle = i*angle_step;
+        x = rad*np.cos(angle);
+        y = rad*np.sin(angle);
+        z = 0;
+        circle_pts.append(Point3(x,y,z));
+    return circle_pts
+
+#Make a 2D sqare with a variable side length. It's always defined by 4 points
+def shape_square(side_len = 1):
+    x = y = 0.5*side_len;
+    pt1 = Point3(x,y,0);
+    pt2 = Point3(-x,y,0);
+    pt3 = Point3(-x,-y,0);
+    pt4 = Point3(x,-y,0);
+    return [pt1,pt2,pt3,pt4]
+    
+
+#Define the problem geometry in this function
+#Extrude the 2D shape along the imported csv
+def assembly():
+    #Generate Point3 array of 3D points from csv file and adjust scaling
+    scale_factor = 100;
+    contours = ext_path('Spiral5.csv', scale_factor);
+
+    #Define the volume/ surfaces (multiple ways to do so, probably will need to use a combination of difference and union with basic geometry)
+    #Also note that openSCAD works by defining the geometry at the origen and then translating it 
+    cube_extr = linear_extrude(2*contours[1],True,100,0,100,1)(square(2*contours[1],True));
+    
+    circle = shape_circle(100,5);
+    
+    extruded = extrude_along_path(circle,contours[0]);
+    
+    #a is an openSCAD object, can be multiple by using +=
+    a = extruded;
+    # a += cube_extr;
+    #a = difference()(cube_extr,extruded)
+    return a
+
+if __name__ == '__main__':
+    out_dir = sys.argv[1] if len(sys.argv) > 1 else None
+    a = assembly()
+    file_out = scad_render_to_file(a, out_dir=out_dir, include_orig_code=True)
+    #open the file in python like a text edit, find the line where the extruded object is and append $fn param
+    print(f"{__file__}: SCAD file written to: \n{file_out}")
+
